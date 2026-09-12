@@ -18,8 +18,10 @@ import {
   Building2,
   KeyRound,
   AlertCircle,
-  UserCheck,
-  Sparkles,
+  Zap,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export interface AuthorityUser {
@@ -39,27 +41,28 @@ export const AuthorityLogin: React.FC<AuthorityLoginProps> = ({
   onLoginSuccess,
   onCancel,
 }) => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("admin@pwd.bmc.gov.in");
+  const [password, setPassword] = useState("admin123");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
 
-  const demoAccounts: AuthorityUser[] = [
-    {
-      name: "Eng. Rajiv Menon",
-      email: "r.menon@pwd.municipal.gov",
-      role: "Lead Road Engineer",
-      department: "Public Works Dept (Div 1)",
-      badgeId: "PWD-OFFICER-4882",
-    },
-    {
-      name: "Insp. Priya Sharma",
-      email: "p.sharma@traffic.municipal.gov",
-      role: "Field Safety Inspector",
-      department: "Traffic & Road Infrastructure",
-      badgeId: "TRAFFIC-INSP-2109",
-    },
-  ];
+  // Single Quick Admin Account
+  const ADMIN_USER: AuthorityUser = {
+    name: "Eng. Rajesh Varma",
+    email: "admin@pwd.bmc.gov.in",
+    role: "Chief Municipal Road Engineer",
+    department: "BMC Public Works Department",
+    badgeId: "BMC-PWD-ADMIN-01",
+  };
+
+  const handleQuickAdminLogin = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      onLoginSuccess(ADMIN_USER);
+    }, 150);
+  };
 
   const handleStandardLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,138 +70,149 @@ export const AuthorityLogin: React.FC<AuthorityLoginProps> = ({
     setError(null);
 
     setTimeout(() => {
-      if (email.trim().toLowerCase().includes("pwd") || email.trim().toLowerCase().includes("gov") || password.length >= 4) {
+      if (
+        email.trim().toLowerCase().includes("pwd") ||
+        email.trim().toLowerCase().includes("bmc") ||
+        email.trim().toLowerCase().includes("gov") ||
+        email.trim().toLowerCase().includes("admin") ||
+        password.length >= 4
+      ) {
         const user: AuthorityUser = {
           name: email.split("@")[0].replace(".", " ").toUpperCase(),
           email: email.trim(),
-          role: "Municipal Officer",
-          department: "Public Works Department",
-          badgeId: `OFFICER-${Math.floor(1000 + Math.random() * 9000)}`,
+          role: "Municipal Admin Officer",
+          department: "BMC Public Works Department",
+          badgeId: `BMC-${Math.floor(1000 + Math.random() * 9000)}`,
         };
         setIsLoading(false);
         onLoginSuccess(user);
       } else {
         setIsLoading(false);
-        setError("Invalid municipal credentials. Please enter a valid authority email or use 1-click Quick Login.");
+        setError("Invalid credentials. Please click '1-Click Quick Admin Login' above.");
       }
-    }, 400);
-  };
-
-  const handleQuickLogin = (demoUser: AuthorityUser) => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      onLoginSuccess(demoUser);
     }, 200);
   };
 
   return (
-    <div className="max-w-md mx-auto py-8 px-4 animate-in fade-in duration-300">
-      <Card className="shadow-lg border-primary/20">
-        <CardHeader className="text-center pb-4">
-          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-3">
+    <div className="max-w-md w-full mx-auto py-4 sm:py-8 px-3 sm:px-4 animate-in fade-in duration-300">
+      <Card className="shadow-lg border-primary/20 overflow-hidden">
+        <CardHeader className="text-center pb-3 sm:pb-4 bg-muted/20 border-b">
+          <div className="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2 shadow-xs">
             <Building2 className="w-6 h-6" />
           </div>
           <div className="flex items-center justify-center gap-1.5 mb-1">
-            <Lock className="w-4 h-4 text-amber-500" />
-            <Badge variant="outline" className="text-xs font-semibold">
-              Restricted Authority Access
+            <Lock className="w-3.5 h-3.5 text-amber-500" />
+            <Badge variant="outline" className="text-[11px] font-semibold">
+              Municipal Portal Access
             </Badge>
           </div>
-          <CardTitle className="text-2xl font-bold text-foreground">
-            Municipal CMS Login
+          <CardTitle className="text-xl sm:text-2xl font-bold text-foreground">
+            Authority CMS Login
           </CardTitle>
-          <CardDescription className="text-xs">
-            Sign in with authorized municipal department credentials to review, assign, and verify road complaints.
+          <CardDescription className="text-xs max-w-xs mx-auto">
+            Access the Municipal Road Defect Triage, Engineering Assignment, and Resolution Management System.
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="p-4 sm:p-6 space-y-4">
           {error && (
-            <Alert variant="destructive" className="py-2.5">
+            <Alert variant="destructive" className="py-2">
               <AlertCircle className="w-4 h-4" />
-              <AlertTitle className="text-xs">Authentication Failed</AlertTitle>
+              <AlertTitle className="text-xs">Authentication Notice</AlertTitle>
               <AlertDescription className="text-xs">{error}</AlertDescription>
             </Alert>
           )}
 
-          <form onSubmit={handleStandardLogin} className="space-y-3.5">
-            <div className="space-y-1.5">
-              <Label htmlFor="auth-email" className="text-xs font-medium">
-                Official Email ID
-              </Label>
-              <Input
-                id="auth-email"
-                type="email"
-                placeholder="officer@pwd.municipal.gov"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="text-sm"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="auth-pass" className="text-xs font-medium">
-                  Password
-                </Label>
+          {/* SINGLE QUICK ADMIN LOGIN BUTTON */}
+          <div className="p-4 rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border-2 border-primary/30 text-center space-y-3 shadow-xs">
+            <div className="space-y-1">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary">
+                <Zap className="w-4 h-4 fill-primary text-primary" />
+                Instant Access
               </div>
-              <Input
-                id="auth-pass"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="text-sm"
-              />
+              <h3 className="font-bold text-foreground text-sm sm:text-base">
+                1-Click Quick Admin Login
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Sign in instantly as <strong className="text-foreground">Chief Municipal Road Engineer</strong> ({ADMIN_USER.name})
+              </p>
             </div>
 
-            <Button type="submit" disabled={isLoading} className="w-full gap-2 mt-2">
-              <KeyRound className="w-4 h-4" />
-              {isLoading ? "Authenticating..." : "Sign In to CMS"}
+            <Button
+              type="button"
+              onClick={handleQuickAdminLogin}
+              disabled={isLoading}
+              className="w-full gap-2 h-11 text-sm font-semibold shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+            >
+              {isLoading ? (
+                "Signing In..."
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  Enter CMS as Admin
+                  <ArrowRight className="w-4 h-4 ml-auto" />
+                </>
+              )}
             </Button>
-          </form>
-
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground font-medium text-[11px]">
-                Quick Demo Evaluation Login
-              </span>
-            </div>
           </div>
 
-          {/* Quick Demo Login Cards */}
-          <div className="space-y-2">
-            {demoAccounts.map((account) => (
-              <button
-                key={account.email}
-                type="button"
-                onClick={() => handleQuickLogin(account)}
-                className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/40 hover:bg-muted/80 hover:border-primary/40 transition-all text-left text-xs group"
-              >
-                <div>
-                  <div className="font-semibold text-foreground flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-primary" />
-                    {account.name}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {account.role} &bull; {account.department}
-                  </div>
+          {/* Accordion for Manual Login Option */}
+          <div className="border-t pt-3">
+            <button
+              type="button"
+              onClick={() => setShowManualForm(!showManualForm)}
+              className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground font-medium py-1"
+            >
+              <span>Or sign in with custom credentials</span>
+              {showManualForm ? (
+                <ChevronUp className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" />
+              )}
+            </button>
+
+            {showManualForm && (
+              <form onSubmit={handleStandardLogin} className="space-y-3 pt-3 animate-in fade-in duration-200">
+                <div className="space-y-1">
+                  <Label htmlFor="auth-email" className="text-xs font-medium">
+                    Official Email ID
+                  </Label>
+                  <Input
+                    id="auth-email"
+                    type="email"
+                    placeholder="officer@pwd.bmc.gov.in"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="text-xs h-9"
+                  />
                 </div>
-                <Badge variant="secondary" className="text-[10px] group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                  1-Click Login
-                </Badge>
-              </button>
-            ))}
+
+                <div className="space-y-1">
+                  <Label htmlFor="auth-pass" className="text-xs font-medium">
+                    Password
+                  </Label>
+                  <Input
+                    id="auth-pass"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="text-xs h-9"
+                  />
+                </div>
+
+                <Button type="submit" disabled={isLoading} variant="outline" className="w-full gap-2 h-9 text-xs">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  {isLoading ? "Authenticating..." : "Sign In with Credentials"}
+                </Button>
+              </form>
+            )}
           </div>
         </CardContent>
 
-        <CardFooter className="border-t bg-muted/20 py-3 flex justify-between text-xs text-muted-foreground">
+        <CardFooter className="border-t bg-muted/20 py-3 px-4 flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             TLS 256-bit Encrypted

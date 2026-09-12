@@ -30,6 +30,8 @@ def init_db():
         address TEXT NOT NULL,
         description TEXT,
         citizen_name TEXT,
+        citizen_email TEXT,
+        citizen_phone TEXT,
         status TEXT NOT NULL,
         assigned_department TEXT,
         assigned_officer TEXT,
@@ -40,9 +42,26 @@ def init_db():
     )
     """)
     conn.commit()
+
+    # Migration safety for existing database
+    cursor.execute("PRAGMA table_info(complaints)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "citizen_email" not in columns:
+        try:
+            cursor.execute("ALTER TABLE complaints ADD COLUMN citizen_email TEXT")
+            conn.commit()
+        except Exception:
+            pass
+    if "citizen_phone" not in columns:
+        try:
+            cursor.execute("ALTER TABLE complaints ADD COLUMN citizen_phone TEXT")
+            conn.commit()
+        except Exception:
+            pass
     conn.close()
 
 def row_to_complaint(row: sqlite3.Row) -> Complaint:
+    keys = row.keys()
     return Complaint(
         id=row["id"],
         created_at=row["created_at"],
@@ -56,7 +75,9 @@ def row_to_complaint(row: sqlite3.Row) -> Complaint:
         longitude=row["longitude"],
         address=row["address"],
         description=row["description"] or "",
-        citizen_name=row["citizen_name"] or "Anonymous Citizen",
+        citizen_name=row["citizen_name"] or "Citizen User",
+        citizen_email=row["citizen_email"] if "citizen_email" in keys and row["citizen_email"] else "",
+        citizen_phone=row["citizen_phone"] if "citizen_phone" in keys and row["citizen_phone"] else "",
         status=ComplaintStatus(row["status"]),
         assigned_department=row["assigned_department"] or "Unassigned",
         assigned_officer=row["assigned_officer"] or "Unassigned",
@@ -76,7 +97,9 @@ def create_complaint_record(
     longitude: Optional[float],
     address: str,
     description: Optional[str] = "",
-    citizen_name: Optional[str] = "Anonymous Citizen"
+    citizen_name: Optional[str] = "Citizen User",
+    citizen_email: Optional[str] = "",
+    citizen_phone: Optional[str] = ""
 ) -> Complaint:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -98,9 +121,9 @@ def create_complaint_record(
     INSERT INTO complaints (
         id, created_at, updated_at, image, annotated_image, detection_result,
         confidence, severity, latitude, longitude, address, description,
-        citizen_name, status, assigned_department, assigned_officer,
+        citizen_name, citizen_email, citizen_phone, status, assigned_department, assigned_officer,
         internal_notes, timeline, resolution_note, resolution_images
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         complaint_id,
         now_iso,
@@ -114,7 +137,9 @@ def create_complaint_record(
         longitude,
         address or "Verified Road Location",
         description or "",
-        citizen_name or "Anonymous Citizen",
+        citizen_name or "Citizen User",
+        citizen_email or "",
+        citizen_phone or "",
         ComplaintStatus.NEW.value,
         "Public Works Department",
         "Unassigned",
@@ -130,7 +155,9 @@ def create_complaint_record(
 def get_complaints(
     status: Optional[str] = None,
     severity: Optional[str] = None,
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    citizen_email: Optional[str] = None,
+    citizen_phone: Optional[str] = None
 ) -> List[Complaint]:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -142,10 +169,16 @@ def get_complaints(
     if severity and severity != "ALL":
         query += " AND severity = ?"
         params.append(severity)
+    if citizen_email:
+        query += " AND citizen_email = ?"
+        params.append(citizen_email)
+    if citizen_phone:
+        query += " AND citizen_phone = ?"
+        params.append(citizen_phone)
     if search:
-        query += " AND (id LIKE ? OR address LIKE ? OR description LIKE ?)"
+        query += " AND (id LIKE ? OR address LIKE ? OR description LIKE ? OR citizen_name LIKE ? OR citizen_phone LIKE ?)"
         term = f"%{search}%"
-        params.extend([term, term, term])
+        params.extend([term, term, term, term, term])
     query += " ORDER BY created_at DESC"
     cursor.execute(query, params)
     rows = cursor.fetchall()

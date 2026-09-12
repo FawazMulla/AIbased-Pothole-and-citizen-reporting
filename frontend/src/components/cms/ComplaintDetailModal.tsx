@@ -32,6 +32,10 @@ import {
   Sparkles,
   ExternalLink,
   ChevronDown,
+  Phone,
+  Mail,
+  MessageSquare,
+  PartyPopper,
 } from "lucide-react";
 
 interface ComplaintDetailModalProps {
@@ -253,6 +257,77 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({
                 <p className="text-foreground mt-0.5">{complaint.description}</p>
               </div>
             )}
+          </div>
+
+          {/* Citizen Contact & Municipal Field Coordination Card */}
+          <div className="p-3.5 rounded-lg border bg-card space-y-2.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-primary" />
+                Citizen Contact & Coordination
+              </span>
+              <Badge variant="outline" className="text-[10px]">
+                Direct Citizen Link
+              </Badge>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-muted/30 p-2.5 rounded border">
+              <div>
+                <div className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                  {complaint.citizen_name || "Citizen User"}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
+                  {complaint.citizen_phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-emerald-600" />
+                      {complaint.citizen_phone}
+                    </span>
+                  )}
+                  {complaint.citizen_email && (
+                    <span className="flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-blue-600" />
+                      {complaint.citizen_email}
+                    </span>
+                  )}
+                  {!complaint.citizen_phone && !complaint.citizen_email && (
+                    <span>No contact information provided</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Direct Action Triggers */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {complaint.citizen_phone && (
+                  <a
+                    href={`tel:${complaint.citizen_phone.replace(/\s+/g, '')}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition-colors"
+                  >
+                    <Phone className="w-3 h-3" />
+                    Call
+                  </a>
+                )}
+                {complaint.citizen_phone && (
+                  <a
+                    href={`https://wa.me/${complaint.citizen_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${complaint.citizen_name}, regarding your road defect complaint #${complaint.id} at ${complaint.address}.`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-medium transition-colors"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    WhatsApp
+                  </a>
+                )}
+                {complaint.citizen_email && (
+                  <a
+                    href={`mailto:${complaint.citizen_email}?subject=${encodeURIComponent(`Update on BMC Complaint #${complaint.id}`)}&body=${encodeURIComponent(`Dear ${complaint.citizen_name},\n\nRegarding your road defect complaint #${complaint.id} at ${complaint.address}.\n\nCurrent Status: ${complaint.status}\n\nBMC Public Works Department`)}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
+                  >
+                    <Mail className="w-3 h-3" />
+                    Email
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Workflow Action Panel */}

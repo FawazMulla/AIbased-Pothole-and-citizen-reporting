@@ -1,6 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
-  ? import.meta.env.VITE_API_BASE_URL
-  : (typeof window !== "undefined" && window.location.port === "5173" ? "http://localhost:8000" : "");
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+function getFullUrl(path: string): URL {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (API_BASE_URL && API_BASE_URL.startsWith("http")) {
+    return new URL(cleanPath, API_BASE_URL);
+  }
+  const base = typeof window !== "undefined" && window.location.origin
+    ? window.location.origin
+    : "http://localhost:5174";
+  return new URL(cleanPath, base);
+}
 
 export type ComplaintStatus =
   | "NEW"
@@ -54,6 +63,8 @@ export interface Complaint {
   address: string;
   description?: string;
   citizen_name: string;
+  citizen_email?: string;
+  citizen_phone?: string;
   status: ComplaintStatus;
   assigned_department?: string;
   assigned_officer?: string;
@@ -77,7 +88,7 @@ export async function detectPotholes(file: File): Promise<DetectionResult> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE_URL}/api/detect`, {
+  const res = await fetch(getFullUrl("/api/detect").toString(), {
     method: "POST",
     body: formData,
   });
@@ -101,8 +112,10 @@ export async function createComplaint(payload: {
   address: string;
   description?: string;
   citizen_name?: string;
+  citizen_email?: string;
+  citizen_phone?: string;
 }): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/complaints`, {
+  const res = await fetch(getFullUrl("/api/complaints").toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -120,11 +133,15 @@ export async function getComplaints(params?: {
   status?: string;
   severity?: string;
   search?: string;
+  citizen_email?: string;
+  citizen_phone?: string;
 }): Promise<Complaint[]> {
-  const url = new URL(`${API_BASE_URL}/api/complaints`);
+  const url = getFullUrl("/api/complaints");
   if (params?.status && params.status !== "ALL") url.searchParams.append("status", params.status);
   if (params?.severity && params.severity !== "ALL") url.searchParams.append("severity", params.severity);
   if (params?.search) url.searchParams.append("search", params.search);
+  if (params?.citizen_email) url.searchParams.append("citizen_email", params.citizen_email);
+  if (params?.citizen_phone) url.searchParams.append("citizen_phone", params.citizen_phone);
 
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error("Failed to fetch complaints");
@@ -132,7 +149,7 @@ export async function getComplaints(params?: {
 }
 
 export async function getComplaintById(id: string): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/complaints/${id}`);
+  const res = await fetch(getFullUrl(`/api/complaints/${id}`).toString());
   if (!res.ok) throw new Error(`Complaint ${id} not found`);
   return res.json();
 }
@@ -143,7 +160,7 @@ export async function updateComplaintStatus(
   note?: string,
   officer_name: string = "Authority Officer"
 ): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/complaints/${id}/status`, {
+  const res = await fetch(getFullUrl(`/api/complaints/${id}/status`).toString(), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status, note, officer_name }),
@@ -159,7 +176,7 @@ export async function assignComplaintOfficer(
   assigned_officer: string,
   note?: string
 ): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/complaints/${id}/assign`, {
+  const res = await fetch(getFullUrl(`/api/complaints/${id}/assign`).toString(), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ assigned_department, assigned_officer, note }),
@@ -175,7 +192,7 @@ export async function resolveComplaintProof(
   resolution_images: string[] = [],
   officer_name: string = "Field Inspector"
 ): Promise<Complaint> {
-  const res = await fetch(`${API_BASE_URL}/api/complaints/${id}/resolve`, {
+  const res = await fetch(getFullUrl(`/api/complaints/${id}/resolve`).toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resolution_note, resolution_images, officer_name }),
@@ -186,7 +203,7 @@ export async function resolveComplaintProof(
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const res = await fetch(`${API_BASE_URL}/api/dashboard/stats`);
+  const res = await fetch(getFullUrl("/api/dashboard/stats").toString());
   if (!res.ok) throw new Error("Failed to fetch stats");
   return res.json();
 }

@@ -90,7 +90,9 @@ def create_complaint(complaint_data: ComplaintCreate):
             longitude=complaint_data.longitude,
             address=complaint_data.address or "Verified Location",
             description=complaint_data.description,
-            citizen_name=complaint_data.citizen_name
+            citizen_name=complaint_data.citizen_name or "Citizen User",
+            citizen_email=complaint_data.citizen_email or "",
+            citizen_phone=complaint_data.citizen_phone or ""
         )
         return complaint
     except Exception as e:
@@ -100,9 +102,17 @@ def create_complaint(complaint_data: ComplaintCreate):
 def list_complaints(
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
-    search: Optional[str] = Query(None)
+    search: Optional[str] = Query(None),
+    citizen_email: Optional[str] = Query(None),
+    citizen_phone: Optional[str] = Query(None)
 ):
-    return get_complaints(status=status, severity=severity, search=search)
+    return get_complaints(
+        status=status,
+        severity=severity,
+        search=search,
+        citizen_email=citizen_email,
+        citizen_phone=citizen_phone
+    )
 
 @app.get("/api/complaints/{complaint_id}", response_model=Complaint)
 def get_complaint(complaint_id: str):

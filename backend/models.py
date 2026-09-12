@@ -44,7 +44,8 @@ class ComplaintCreate(BaseModel):
     longitude: Optional[float] = 77.2090
     address: Optional[str] = "Civil Lines, Main Avenue"
     description: Optional[str] = ""
-    citizen_name: Optional[str] = "Anonymous Citizen"
+    citizen_name: Optional[str] = "Citizen User"
+    citizen_email: Optional[str] = ""
     citizen_phone: Optional[str] = ""
 
 class ComplaintUpdateStatus(BaseModel):
@@ -81,7 +82,9 @@ class Complaint(BaseModel):
     longitude: Optional[float] = None
     address: str
     description: Optional[str] = ""
-    citizen_name: Optional[str] = "Anonymous Citizen"
+    citizen_name: Optional[str] = "Citizen User"
+    citizen_email: Optional[str] = ""
+    citizen_phone: Optional[str] = ""
     status: ComplaintStatus
     assigned_department: Optional[str] = "Unassigned"
     assigned_officer: Optional[str] = "Unassigned"

@@ -35,6 +35,10 @@ import {
   Copy,
   Check,
   Search,
+  UserCheck,
+  User,
+  Phone,
+  Mail,
 } from "lucide-react";
 
 interface CitizenReportProps {
@@ -61,15 +65,32 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Form State
+  // Form State & Citizen Profile
   const [description, setDescription] = useState<string>("");
   const [citizenName, setCitizenName] = useState<string>("");
+  const [citizenEmail, setCitizenEmail] = useState<string>("");
+  const [citizenPhone, setCitizenPhone] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submittedComplaint, setSubmittedComplaint] = useState<Complaint | null>(null);
   const [copiedId, setCopiedId] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved profile on mount
+  React.useEffect(() => {
+    const saved = localStorage.getItem("civicpothole_citizen_profile");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.name) setCitizenName(parsed.name);
+        if (parsed.email) setCitizenEmail(parsed.email);
+        if (parsed.phone) setCitizenPhone(parsed.phone);
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, []);
 
   // Handle GPS Capture
   const handleCaptureLocation = () => {
@@ -149,6 +170,14 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
     e.preventDefault();
     if (!detectionResult) return;
 
+    // Save/Update Citizen Profile locally
+    const profile = {
+      name: citizenName.trim() || "Citizen User",
+      email: citizenEmail.trim(),
+      phone: citizenPhone.trim(),
+    };
+    localStorage.setItem("civicpothole_citizen_profile", JSON.stringify(profile));
+
     setIsSubmitting(true);
     try {
       const complaint = await createComplaint({
@@ -157,12 +186,29 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
         detection_result: detectionResult,
         confidence: detectionResult.confidence,
         severity: detectionResult.severity,
-        latitude: latitude || 28.6139,
-        longitude: longitude || 77.2090,
+        latitude: latitude || 19.0760,
+        longitude: longitude || 72.8777,
         address: address || "Road location captured via camera GPS",
         description: description,
         citizen_name: citizenName || "Citizen User",
+        citizen_email: citizenEmail || undefined,
+        citizen_phone: citizenPhone || undefined,
       });
+
+      // Save to user complaint history in localStorage
+      const existing = localStorage.getItem("civicpothole_user_complaints");
+      let list: string[] = [];
+      if (existing) {
+        try {
+          list = JSON.parse(existing);
+        } catch (e) {
+          list = [];
+        }
+      }
+      if (!list.includes(complaint.id)) {
+        list.unshift(complaint.id);
+        localStorage.setItem("civicpothole_user_complaints", JSON.stringify(list));
+      }
 
       setSubmittedComplaint(complaint);
     } catch (err: any) {
@@ -189,34 +235,37 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
 
   // SUCCESS CONFIRMATION STATE
   if (submittedComplaint) {
+    const tweetText = `🚨 Road Defect Alert: Pothole reported via @CivicPotholeAI!\n📍 Location: ${submittedComplaint.address}\n🆔 Reference ID: ${submittedComplaint.id}\n⚠️ Severity: ${submittedComplaint.severity}\n\nUrgent road repair & inspection requested @mybmc @CMOMaharashtra @MahaDGIPR #BMC #RoadSafety #MumbaiRoads #PotholeFix #CivicAction`;
+    const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+
     return (
-      <div className="max-w-xl mx-auto py-8 px-4 animate-in fade-in duration-300">
-        <Card className="border-emerald-500/40 shadow-lg text-center">
-          <CardHeader className="pb-4">
-            <div className="mx-auto w-16 h-16 bg-emerald-100 dark:bg-emerald-950/50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
-              <CheckCircle2 className="w-10 h-10" />
+      <div className="max-w-xl mx-auto py-6 sm:py-8 px-3 sm:px-4 animate-in fade-in duration-300">
+        <Card className="border-emerald-500/40 shadow-lg text-center overflow-hidden">
+          <CardHeader className="pb-3 sm:pb-4 bg-emerald-50/40 dark:bg-emerald-950/20 border-b">
+            <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 bg-emerald-100 dark:bg-emerald-950/50 rounded-full flex items-center justify-center text-emerald-600 mb-2 shadow-xs">
+              <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10" />
             </div>
-            <CardTitle className="text-2xl font-bold text-foreground">
+            <CardTitle className="text-xl sm:text-2xl font-bold text-foreground">
               Complaint Successfully Submitted!
             </CardTitle>
-            <CardDescription className="text-sm">
+            <CardDescription className="text-xs sm:text-sm">
               Your road defect report has been registered in the municipal complaint system.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-muted/60 rounded-lg border border-border">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <div className="p-3 sm:p-4 bg-muted/60 rounded-lg border border-border">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                 Your Complaint Tracking ID
               </p>
-              <div className="flex items-center justify-center gap-3">
-                <span className="text-2xl font-mono font-bold text-primary">
+              <div className="flex items-center justify-center gap-2 sm:gap-3">
+                <span className="text-xl sm:text-2xl font-mono font-bold text-primary truncate">
                   {submittedComplaint.id}
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 gap-1"
+                  className="h-8 gap-1 text-xs shrink-0"
                   onClick={() => handleCopyId(submittedComplaint.id)}
                 >
                   {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -225,31 +274,64 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-left text-xs p-3 bg-card border rounded-md">
+            <div className="grid grid-cols-2 gap-2.5 text-left text-xs p-3 bg-card border rounded-md">
               <div>
-                <span className="text-muted-foreground">Status:</span>
+                <span className="text-muted-foreground text-[11px]">Status:</span>
                 <div className="mt-1">
                   <StatusBadge status={submittedComplaint.status} />
                 </div>
               </div>
               <div>
-                <span className="text-muted-foreground">Severity:</span>
+                <span className="text-muted-foreground text-[11px]">Severity:</span>
                 <div className="mt-1">
                   <SeverityBadge severity={submittedComplaint.severity} />
                 </div>
               </div>
               <div className="col-span-2">
-                <span className="text-muted-foreground">Location:</span>
+                <span className="text-muted-foreground text-[11px]">Location:</span>
                 <p className="font-medium text-foreground truncate mt-0.5">
                   {submittedComplaint.address}
                 </p>
               </div>
             </div>
+
+            {/* SHARE ON X (TWITTER) TAGGING BMC */}
+            <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950 text-white border border-slate-800 text-left space-y-2.5 shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 fill-white shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  <span className="text-xs font-bold text-white tracking-wide">
+                    Amplify on X & Tag Municipal Authority
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-[10px] text-sky-400 border-sky-400/40 bg-sky-950/40">
+                  @mybmc
+                </Badge>
+              </div>
+
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Post this road defect directly on X to alert municipal road engineers and tag <strong className="text-white">@mybmc</strong> for expedited repair action.
+              </p>
+
+              <a
+                href={twitterShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center w-full gap-2 px-4 py-2.5 bg-white text-slate-950 hover:bg-slate-100 active:scale-[0.99] rounded-lg text-xs sm:text-sm font-bold shadow transition-all"
+              >
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                Post on X & Tag @mybmc
+              </a>
+            </div>
           </CardContent>
 
-          <CardFooter className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+          <CardFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-center pt-2 pb-4 px-4">
             <Button
-              className="w-full sm:w-auto gap-2"
+              className="w-full sm:w-auto gap-2 text-xs sm:text-sm"
               onClick={() => onNavigateToTrack(submittedComplaint.id)}
             >
               <Search className="w-4 h-4" />
@@ -257,7 +339,7 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
             </Button>
             <Button
               variant="outline"
-              className="w-full sm:w-auto gap-2"
+              className="w-full sm:w-auto gap-2 text-xs sm:text-sm"
               onClick={handleReset}
             >
               <RotateCcw className="w-4 h-4" />
@@ -479,33 +561,73 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
                 )}
               </div>
 
-              {/* Description & Citizen Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="citizen-name" className="text-xs font-medium">
-                    Your Name (Optional)
-                  </Label>
-                  <Input
-                    id="citizen-name"
-                    value={citizenName}
-                    onChange={(e) => setCitizenName(e.target.value)}
-                    placeholder="e.g. John Doe"
-                    className="text-sm"
-                  />
+              {/* Citizen Contact Profile (Name, Email, Phone) */}
+              <div className="pt-2 border-t space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-primary" />
+                    Citizen Contact Info (For Municipal Follow-up)
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">Auto-saved to profile</span>
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="desc-input" className="text-xs font-medium">
-                    Additional Details / Notes (Optional)
-                  </Label>
-                  <Textarea
-                    id="desc-input"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="e.g., Near bus stop on the left lane, severe waterlogging..."
-                    className="text-sm resize-none"
-                    rows={2}
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="citizen-name" className="text-[11px] font-medium">
+                      Your Name
+                    </Label>
+                    <Input
+                      id="citizen-name"
+                      value={citizenName}
+                      onChange={(e) => setCitizenName(e.target.value)}
+                      placeholder="e.g. Rahul Sharma"
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="citizen-phone" className="text-[11px] font-medium">
+                      Phone Number (SMS / Call)
+                    </Label>
+                    <Input
+                      id="citizen-phone"
+                      type="tel"
+                      value={citizenPhone}
+                      onChange={(e) => setCitizenPhone(e.target.value)}
+                      placeholder="e.g. +91 98200 12345"
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="citizen-email" className="text-[11px] font-medium">
+                      Email Address
+                    </Label>
+                    <Input
+                      id="citizen-email"
+                      type="email"
+                      value={citizenEmail}
+                      onChange={(e) => setCitizenEmail(e.target.value)}
+                      placeholder="e.g. rahul@gmail.com"
+                      className="text-xs h-9"
+                    />
+                  </div>
                 </div>
+              </div>
+
+              {/* Additional Notes */}
+              <div className="space-y-1.5 pt-1">
+                <Label htmlFor="desc-input" className="text-xs font-medium">
+                  Additional Road Notes / Landmark (Optional)
+                </Label>
+                <Textarea
+                  id="desc-input"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g., Near bus stop on the left lane, severe waterlogging..."
+                  className="text-xs resize-none"
+                  rows={2}
+                />
               </div>
             </CardContent>
 
