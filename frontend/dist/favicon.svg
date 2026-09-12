@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="road-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+  <!-- Background Shield/Rounded Box -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)" />
+  
+  <!-- Perspective Road -->
+  <path d="M192 128 L320 128 L384 400 L128 400 Z" fill="#334155" />
+  
+  <!-- Road Center Dashed Line -->
+  <line x1="256" y1="144" x2="256" y2="200" stroke="#f8fafc" stroke-width="12" stroke-linecap="round" />
+  <line x1="256" y1="232" x2="256" y2="304" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" />
+  <line x1="256" y1="336" x2="256" y2="390" stroke="#f8fafc" stroke-width="20" stroke-linecap="round" />
+  
+  <!-- AI Detection Bounding Box on Pothole -->
+  <rect x="180" y="270" width="152" height="96" rx="14" fill="none" stroke="#ef4444" stroke-width="14" stroke-dasharray="8 6" />
+  
+  <!-- Pothole Center Anomaly -->
+  <ellipse cx="256" cy="318" rx="44" ry="24" fill="#0f172a" stroke="#f97316" stroke-width="8" />
+  
+  <!-- AI Scanner Corner Markers -->
+  <path d="M164 254 L164 280 M164 254 L190 254" stroke="#3b82f6" stroke-width="14" stroke-linecap="round" />
+  <path d="M348 254 L348 280 M348 254 L322 254" stroke="#3b82f6" stroke-width="14" stroke-linecap="round" />
+  <path d="M164 382 L164 356 M164 382 L190 382" stroke="#3b82f6" stroke-width="14" stroke-linecap="round" />
+  <path d="M348 382 L348 356 M348 382 L322 382" stroke="#3b82f6" stroke-width="14" stroke-linecap="round" />
+  
+  <!-- Top AI Node Sparkle -->
+  <circle cx="360" cy="150" r="28" fill="url(#accent-grad)" />
+  <path d="M360 136 L364 146 L374 150 L364 154 L360 164 L356 154 L346 150 L356 146 Z" fill="#ffffff" />
+</svg>
