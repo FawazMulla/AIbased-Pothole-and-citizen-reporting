@@ -6,6 +6,8 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from fastapi.responses import FileResponse
+
 from .models import (
     ComplaintStatus,
     DefectSeverity,
@@ -45,19 +47,19 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-@app.get("/")
-def root():
-    return {
-        "status": "online",
-        "service": "AI Pothole Detection & Citizen Reporting Platform",
-        "model_provenance": "PeterHdd/pothole-detection-yolo (YOLOv8)",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
+FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+if os.path.exists(FRONTEND_DIST):
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "yolo_ready": ai_service.model is not None}
+    return {
+        "status": "ok",
+        "yolo_ready": ai_service.model is not None,
+        "monolith_frontend_ready": os.path.exists(os.path.join(FRONTEND_DIST, "index.html"))
+    }
 
 @app.post("/api/detect", response_model=DetectionResult)
 async def detect_potholes(file: UploadFile = File(...)):
@@ -165,3 +167,23 @@ def get_dashboard_stats():
         high_severity=high_sev,
         recent_complaints=all_complaints[:6]
     )
+
+@app.get("/{full_path:path}")
+async def serve_spa_frontend(full_path: str):
+    if full_path.startswith("api") or full_path.startswith("uploads") or full_path in ["docs", "redoc", "openapi.json", "health"]:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    
+    target_file = os.path.join(FRONTEND_DIST, full_path)
+    if os.path.isfile(target_file):
+        return FileResponse(target_file)
+    
+    index_file = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    
+    return {
+        "status": "online",
+        "service": "AI Pothole Detection & Citizen Reporting Platform",
+        "docs": "/docs",
+        "note": "Frontend build not found in frontend/dist. Build frontend first."
+    }

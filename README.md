@@ -90,19 +90,24 @@ Access the application at `http://localhost:5173`.
 
 ---
 
-## 🌐 Cloud Deployment (Render)
+## 🌐 Cloud Deployment (Render Monolith)
 
-This repository includes a native [`render.yaml`](render.yaml) Blueprint for zero-friction cloud deployment of both the backend and frontend.
+This repository is configured to deploy as a **single unified monolith** (FastAPI backend serves both the AI REST endpoints and the compiled React SPA from one single service and URL).
 
-### One-Click Deploy via Render Blueprint:
+### Deploy via Render:
 1. Push this repository to your GitHub account.
-2. Log into [Render Dashboard](https://dashboard.render.com).
-3. Click **New +** ➔ **Blueprint**.
-4. Connect your GitHub repository.
-5. Render will automatically detect `render.yaml` and provision:
-   - **`civicpothole-backend`**: FastAPI Python Web Service running on port `8000` / dynamic `$PORT`.
-   - **`civicpothole-frontend`**: Vite Static Site automatically wired to the backend URL.
-6. Click **Apply** to trigger build and deployment.
+2. In the [Render Dashboard](https://dashboard.render.com), click **New +** ➔ **Web Service** (or **Blueprint**).
+3. Connect `AIbased-Pothole-and-citizen-reporting`.
+4. Configuration:
+   - **Runtime**: `Python 3`
+   - **Build Command**: `cd frontend && npm install && npm run build && cd .. && pip install -r backend/requirements.txt`
+   - **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+   - **Environment Variables**:
+     - `PYTHON_VERSION`: `3.10.12`
+     - `NODE_VERSION`: `20.18.0`
+     - `YOLO_DEVICE`: `cpu`
+     - `MODEL_PATH`: `backend/pothole_yolov8.pt`
+5. Deploy and your entire application will be live at a single Render URL!
 
 ---
 
