@@ -35,11 +35,9 @@ open_source_yolo/
 .agents/
 *mcp_config.json
 
-# Frontend Node dependencies and build
+# Frontend Node dependencies
 frontend/node_modules/
-frontend/dist/
 node_modules/
-dist/
 .env.local
 .env.*.local
 
