@@ -108,15 +108,15 @@ This repository includes a native [`render.yaml`](render.yaml) Blueprint for zer
 
 ## 🔌 Render Model Context Protocol (MCP) Setup
 
-To connect and manage Render services using Render's Model Context Protocol (MCP) in your IDE or AI assistant:
+Render provides an official hosted MCP server at `https://mcp.render.com/mcp`.
 
 ### 1. Obtain Render API Key
 1. Go to [Render Account Settings](https://dashboard.render.com/u/settings).
-2. Scroll to **API Keys** and generate a new API token.
+2. Scroll to **API Keys** and generate a new API token (starts with `rnd_`).
 
-### 2. Configure MCP Server in `mcp_config.json`
-Add the Render MCP server entry to your MCP configuration file:
+### 2. Configure MCP Server
 
+#### Option A: Command-based (`npx mcp-remote`) in `mcp_config.json`:
 ```json
 {
   "mcpServers": {
@@ -124,17 +124,34 @@ Add the Render MCP server entry to your MCP configuration file:
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-render"
+        "mcp-remote",
+        "https://mcp.render.com/mcp",
+        "--header",
+        "Authorization: Bearer ${RENDER_API_KEY}"
       ],
       "env": {
-        "RENDER_API_KEY": "rnd_YOUR_RENDER_API_KEY_HERE"
+        "RENDER_API_KEY": "rnd_YOUR_ACTUAL_RENDER_API_KEY"
       }
     }
   }
 }
 ```
 
-Once connected, you can list services, trigger deployments, inspect build logs, and manage environment variables directly through MCP tools.
+#### Option B: Direct HTTP / SSE (Cursor / Remote MCP):
+```json
+{
+  "mcpServers": {
+    "render": {
+      "url": "https://mcp.render.com/mcp",
+      "headers": {
+        "Authorization": "Bearer rnd_YOUR_ACTUAL_RENDER_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Once connected, you can manage workspaces, deploy services, stream build logs, query databases, and inspect metrics directly via AI prompts (e.g. `List my Render services` or `Set my Render workspace to [name]`).
 
 ---
 
