@@ -337,33 +337,6 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({
               Authority Actions & Workflow
             </h4>
 
-            <div className="flex flex-wrap gap-2">
-              {/* Assign Trigger */}
-              <Button
-                size="sm"
-                variant={isAssigning ? "default" : "outline"}
-                className="gap-1.5"
-                onClick={() => setIsAssigning(!isAssigning)}
-              >
-                <UserCheck className="w-4 h-4 text-purple-600" />
-                {complaint.assigned_officer !== "Unassigned"
-                  ? "Reassign Officer"
-                  : "Assign Team"}
-              </Button>
-
-              {/* Resolve Trigger */}
-              {complaint.status !== "RESOLVED" && (
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => setIsResolving(!isResolving)}
-                >
-                  <CheckCheck className="w-4 h-4" />
-                  Mark as Resolved
-                </Button>
-              )}
-            </div>
-
             {/* Assignment Dropdown Subform */}
             {isAssigning && (
               <form onSubmit={handleAssign} className="p-3 bg-muted/60 rounded border space-y-3 animate-in fade-in duration-200">
@@ -443,18 +416,21 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({
               </form>
             )}
 
-            {/* Resolution Subform */}
+            {/* Resolution Subform - Mandatory Photo & Notes */}
             {isResolving && (
-              <form onSubmit={handleResolve} className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-800 rounded space-y-3 animate-in fade-in duration-200">
-                <h5 className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  <CheckCheck className="w-3.5 h-3.5" />
-                  Upload Repair Completion Proof & Resolution Notes
-                </h5>
+              <form onSubmit={handleResolve} className="p-4 bg-emerald-50/70 border border-emerald-300 rounded-xl space-y-3.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
+                  <h5 className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <CheckCheck className="w-4 h-4 text-emerald-600" />
+                    Mandatory Repair Proof & Resolution Verification
+                  </h5>
+                  <Badge className="bg-emerald-600 text-white text-[10px]">Photo Required</Badge>
+                </div>
 
                 {/* Resolving Officer Dropdown */}
                 <div className="space-y-1">
-                  <Label htmlFor="resolving-officer-select" className="text-[11px] font-medium">
-                    Verified By Officer
+                  <Label htmlFor="resolving-officer-select" className="text-[11px] font-semibold text-slate-700">
+                    Inspecting Officer / Engineer
                   </Label>
                   <div className="relative">
                     <select
@@ -462,7 +438,7 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({
                       value={resolvingOfficer}
                       onChange={(e) => setResolvingOfficer(e.target.value)}
                       required
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1.5 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none pr-8 cursor-pointer"
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1.5 text-xs appearance-none pr-8 cursor-pointer shadow-xs"
                     >
                       {MUNICIPAL_OFFICERS.map((off) => (
                         <option key={off.name} value={off.name}>
@@ -474,69 +450,135 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({
                   </div>
                 </div>
 
-                <div>
-                  <Label className="text-[11px]">Resolution Summary</Label>
+                {/* Resolution Note */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-semibold text-slate-700">
+                    Engineering Resolution Note / Compaction Summary <span className="text-red-500">*</span>
+                  </Label>
                   <Textarea
-                    placeholder="e.g. Asphalt patching applied, surface leveled and tested for drainage."
+                    placeholder="e.g. Mastic asphalt rolled, cavity sealed, level flush approved with drainage clearance."
                     value={resolutionNote}
                     onChange={(e) => setResolutionNote(e.target.value)}
                     required
-                    className="text-xs resize-none"
+                    className="text-xs resize-none bg-white"
                     rows={2}
                   />
                 </div>
 
-                <div>
-                  <Label className="text-[11px]">Repair Evidence Photo</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleResolveImageUpload}
-                    className="text-xs h-9"
-                  />
+                {/* Repair Photo Evidence Upload with Live Preview */}
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-semibold text-slate-700 flex items-center justify-between">
+                    <span>After-Repair Photo Evidence (Required for Closure) <span className="text-red-500">*</span></span>
+                    {resolutionImage && (
+                      <span className="text-emerald-700 text-[10px] font-bold flex items-center gap-1">
+                        <CheckCheck className="w-3 h-3" /> Image Uploaded
+                      </span>
+                    )}
+                  </Label>
+
+                  {resolutionImage ? (
+                    <div className="relative rounded-lg overflow-hidden border border-emerald-400 bg-slate-950 h-36 flex items-center justify-center group">
+                      <img
+                        src={resolutionImage}
+                        alt="Resolution Proof Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setResolutionImage("")}
+                        className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white text-[10px] px-2 py-1 rounded transition-colors"
+                      >
+                        Change Photo
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-emerald-300 rounded-lg p-3 text-center bg-white hover:bg-emerald-50/40 transition-colors">
+                      <Upload className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
+                      <p className="text-xs font-semibold text-slate-800">Upload "After Repair" Photo Proof</p>
+                      <p className="text-[10px] text-slate-500 mb-2">Timestamped photo of leveled and repaired road patch</p>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleResolveImageUpload}
+                        className="text-xs h-8 max-w-xs mx-auto cursor-pointer file:cursor-pointer"
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setIsResolving(false)}>
+                <div className="flex justify-end gap-2 pt-1 border-t border-emerald-200">
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setIsResolving(false)} className="text-xs">
                     Cancel
                   </Button>
-                  <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                    Submit Resolution & Close
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5 shadow-sm"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    Verify & Mark Resolved
                   </Button>
                 </div>
               </form>
             )}
 
-            {/* Quick Status Transition Dropdown */}
+            {/* Status Transition Control (Unified: Intercepts RESOLVED to mandate photo) */}
             <div className="border-t pt-3 flex flex-col sm:flex-row items-center gap-2">
               <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                Change Status:
+                Update Status:
               </span>
               <div className="relative flex-1 w-full">
                 <select
                   value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value as ComplaintStatus)}
-                  className="w-full h-8 rounded-md border text-xs px-2.5 bg-background appearance-none pr-8 cursor-pointer"
+                  onChange={(e) => {
+                    const val = e.target.value as ComplaintStatus;
+                    setSelectedStatus(val);
+                    if (val === "RESOLVED") {
+                      setIsResolving(true);
+                      setIsAssigning(false);
+                    } else if (val === "ASSIGNED") {
+                      setIsAssigning(true);
+                      setIsResolving(false);
+                    } else {
+                      setIsResolving(false);
+                      setIsAssigning(false);
+                    }
+                  }}
+                  className="w-full h-8 rounded-md border text-xs px-2.5 bg-background appearance-none pr-8 cursor-pointer shadow-xs"
                 >
-                  <option value="">-- Select Target Status --</option>
-                  <option value="NEW">NEW</option>
-                  <option value="UNDER REVIEW">UNDER REVIEW</option>
-                  <option value="VERIFIED">VERIFIED</option>
-                  <option value="ASSIGNED">ASSIGNED</option>
-                  <option value="IN PROGRESS">IN PROGRESS</option>
-                  <option value="RESOLVED">RESOLVED</option>
-                  <option value="REJECTED">REJECTED</option>
+                  <option value="">-- Select Status Transition --</option>
+                  <option value="NEW">NEW (Unreviewed)</option>
+                  <option value="UNDER REVIEW">UNDER REVIEW (Inspecting)</option>
+                  <option value="VERIFIED">VERIFIED (Hazard Confirmed)</option>
+                  <option value="ASSIGNED">ASSIGNED (Team Dispatched)</option>
+                  <option value="IN PROGRESS">IN PROGRESS (Work Underway)</option>
+                  <option value="RESOLVED">RESOLVED (Requires Photo Proof 📷)</option>
+                  <option value="REJECTED">REJECTED (Invalid / Duplicate)</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!selectedStatus || isUpdatingStatus}
-                onClick={handleStatusChange}
-              >
-                Update Status
-              </Button>
+
+              {selectedStatus === "RESOLVED" ? (
+                <Button
+                  size="sm"
+                  className="h-8 text-xs w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1"
+                  onClick={() => setIsResolving(true)}
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  Attach Proof & Resolve
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs w-full sm:w-auto"
+                  disabled={!selectedStatus || isUpdatingStatus}
+                  onClick={handleStatusChange}
+                >
+                  {isUpdatingStatus ? "Updating..." : "Apply Status"}
+                </Button>
+              )}
             </div>
           </div>
 

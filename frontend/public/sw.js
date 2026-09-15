@@ -1,17 +1,6 @@
-const CACHE_NAME = "civicpothole-pwa-v1";
-const ASSETS_TO_CACHE = [
-  "/",
-  "/index.html",
-  "/favicon.svg",
-  "/manifest.json"
-];
+const CACHE_NAME = "civicpothole-pwa-v2";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
   self.skipWaiting();
 });
 
@@ -32,12 +21,24 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   // Pass through non-GET and API calls directly
-  if (event.request.method !== "GET" || event.request.url.includes("/api/")) {
+  if (event.request.method !== "GET" || event.request.url.includes("/api/") || event.request.url.includes("/uploads/")) {
     return;
   }
+
+  // Network-first strategy: try network first, fallback to cache if offline
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === "basic") {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });

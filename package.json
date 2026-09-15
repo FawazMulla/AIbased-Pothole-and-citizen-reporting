@@ -1,0 +1,12 @@
+{
+  "name": "civicpothole-ai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "backend": "uvicorn backend.main:app --reload --port 8000",
+    "start": "uvicorn backend.main:app --host 0.0.0.0 --port 8000"
+  }
+}

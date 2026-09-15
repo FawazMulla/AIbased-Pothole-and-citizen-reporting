@@ -86,75 +86,69 @@ class PotholeDetectionService:
         h, w = img_bgr.shape[:2]
         detections: List[Dict[str, Any]] = []
 
-        # 1. Run YOLOv8 model inference
+        # 1. Run fine-tuned YOLOv8 model inference
         if self.model is not None:
             try:
                 # Run YOLO inference with 0.25 confidence threshold
                 results = self.model.predict(img_bgr, imgsz=640, conf=0.25, verbose=False)
-                if results:
+                if results and len(results) > 0:
                     result = results[0]
                     for box in result.boxes:
                         cls_id = int(box.cls[0].item())
                         raw_name = result.names.get(cls_id, str(cls_id))
-                        # In the open-source fine-tuned model, class 0 is 'pothole'
-                        label = "pothole" if raw_name in ["0", "pothole", "defect", "hole"] else raw_name
+                        # Fine-tuned pothole model classes or custom pothole label
+                        label = "pothole" if str(raw_name).lower() in ["0", "pothole", "defect", "hole"] else str(raw_name)
                         conf = float(box.conf[0].item())
                         xyxy = [int(v) for v in box.xyxy[0].tolist()]
                         
-                        box_w = max(0, xyxy[2] - xyxy[0])
-                        box_h = max(0, xyxy[3] - xyxy[1])
+                        # Clip bounding box to image bounds
+                        x1 = max(0, min(w, xyxy[0]))
+                        y1 = max(0, min(h, xyxy[1]))
+                        x2 = max(0, min(w, xyxy[2]))
+                        y2 = max(0, min(h, xyxy[3]))
+
+                        box_w = max(0, x2 - x1)
+                        box_h = max(0, y2 - y1)
                         area_ratio = round((box_w * box_h) / (w * h), 4)
 
                         detections.append({
                             "class_name": label,
                             "confidence": round(conf, 2),
-                            "bbox": xyxy,
+                            "bbox": [x1, y1, x2, y2],
                             "area_ratio": area_ratio
                         })
             except Exception as e:
                 print(f"[AI Service] Model predict warning: {e}")
 
-        # 2. Fallback to road anomaly analyzer if model didn't trigger any bbox
-        if not detections:
-            detections = self._detect_road_anomalies_cv(img_bgr)
-
-        # 3. Default defect bounding if testing on synthetic image
-        if not detections:
-            cx, cy = w // 2, h // 2
-            bw, bh = int(w * 0.40), int(h * 0.30)
-            detections.append({
-                "class_name": "pothole",
-                "confidence": 0.88,
-                "bbox": [cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2],
-                "area_ratio": round((bw * bh) / (w * h), 4)
-            })
-
         detected = len(detections) > 0
-        max_conf = max([d["confidence"] for d in detections]) if detections else 0.0
-        total_area_ratio = sum([d.get("area_ratio", 0.05) for d in detections])
+        max_conf = max([d["confidence"] for d in detections]) if detected else 0.0
+        total_area_ratio = sum([d.get("area_ratio", 0.0) for d in detections])
 
-        # Compute severity
-        if total_area_ratio > 0.12 or max_conf > 0.90 or len(detections) >= 2:
+        # Compute severity based on defect count, area and confidence
+        if not detected:
+            severity = "LOW"
+        elif total_area_ratio > 0.12 or max_conf > 0.88 or len(detections) >= 3:
             severity = "HIGH"
-        elif total_area_ratio > 0.05 or max_conf > 0.78:
+        elif total_area_ratio > 0.04 or max_conf > 0.60 or len(detections) >= 2:
             severity = "MEDIUM"
         else:
             severity = "LOW"
 
-        # 4. Generate annotated image with bounding boxes & civic badge overlay
+        # Generate annotated image with bounding boxes & civic badge overlay if defects detected
         annotated_bgr = img_bgr.copy()
-        for idx, det in enumerate(detections):
-            x1, y1, x2, y2 = det["bbox"]
-            color = (30, 40, 220) if severity == "HIGH" else ((20, 140, 240) if severity == "MEDIUM" else (30, 180, 50))
-            
-            # Draw bounding box
-            cv2.rectangle(annotated_bgr, (x1, y1), (x2, y2), color, 3)
-            
-            # Badge header
-            label_text = f"Pothole #{idx+1} ({int(det['confidence']*100)}%) - {severity}"
-            (text_w, text_h), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-            cv2.rectangle(annotated_bgr, (x1, max(0, y1 - text_h - 10)), (x1 + text_w + 12, y1), color, -1)
-            cv2.putText(annotated_bgr, label_text, (x1 + 6, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        if detected:
+            for idx, det in enumerate(detections):
+                x1, y1, x2, y2 = det["bbox"]
+                color = (30, 40, 220) if severity == "HIGH" else ((20, 140, 240) if severity == "MEDIUM" else (30, 180, 50))
+                
+                # Draw bounding box
+                cv2.rectangle(annotated_bgr, (x1, y1), (x2, y2), color, 3)
+                
+                # Badge header
+                label_text = f"Pothole #{idx+1} ({int(det['confidence']*100)}%) - {severity}"
+                (text_w, text_h), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+                cv2.rectangle(annotated_bgr, (x1, max(0, y1 - text_h - 10)), (x1 + text_w + 12, y1), color, -1)
+                cv2.putText(annotated_bgr, label_text, (x1 + 6, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
         # Base64 encodings
         _, buffer = cv2.imencode('.jpg', annotated_bgr, [cv2.IMWRITE_JPEG_QUALITY, 88])
@@ -166,7 +160,7 @@ class PotholeDetectionService:
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
         summary_text = (
             f"{len(detections)} pothole defect{'s' if len(detections) > 1 else ''} identified ({int(max_conf*100)}% confidence, {severity} Severity)."
-            if detected else "No road defect identified."
+            if detected else "No road defects detected in this photo."
         )
 
         return {
