@@ -1,3 +1,12 @@
+"""
+Data-access layer for complaints (see docs/03_BACKEND_WALKTHROUGH.md).
+
+* Uses PostgreSQL when DATABASE_URL is set (Render), otherwise a local SQLite file.
+* Plain SQL with `?` placeholders; DBWrapper.adapt_query converts them to `%s` for Postgres.
+* List/dict fields (timeline, notes, detection_result, ...) are stored as JSON text columns
+  and parsed back in dict_to_complaint().
+* Every lifecycle change (assign / status / resolve) appends a TimelineEvent = audit trail.
+"""
 import sqlite3
 import json
 import os
@@ -147,6 +156,7 @@ def init_db():
 
 
 def row_to_dict(row, cursor=None) -> dict:
+    """Normalise a DB row (sqlite3.Row or Postgres tuple) into a plain dict keyed by column name."""
     if isinstance(row, sqlite3.Row):
         return dict(row)
     if cursor and cursor.description:
@@ -158,6 +168,10 @@ def row_to_dict(row, cursor=None) -> dict:
 
 
 def dict_to_complaint(d: dict) -> Complaint:
+    """
+    Convert a raw DB dict into the Pydantic `Complaint` model.
+    JSON-text columns are parsed; malformed JSON is ignored so one bad row can't break the list.
+    """
     timeline_raw = d.get("timeline")
     timeline_parsed = []
     if timeline_raw:
@@ -232,6 +246,11 @@ def create_complaint_record(
     citizen_phone: Optional[str] = "",
     custom_id: Optional[str] = None
 ) -> Complaint:
+    """
+    Insert a new complaint (status NEW, default department 'Public Works Department')
+    with the first timeline event, and return the stored record.
+    ID format: CMP-2026-<count+101>.
+    """
     conn = db.get_connection()
     cursor = conn.cursor()
     
@@ -298,6 +317,7 @@ def get_complaints(
     citizen_email: Optional[str] = None,
     citizen_phone: Optional[str] = None
 ) -> List[Complaint]:
+    """List complaints newest-first; every filter is optional and combined with AND."""
     conn = db.get_connection()
     cursor = conn.cursor()
     query = "SELECT * FROM complaints WHERE 1=1"
@@ -328,6 +348,7 @@ def get_complaints(
 
 
 def get_complaint_by_id(complaint_id: str) -> Optional[Complaint]:
+    """Fetch one complaint by ID, or None if it does not exist."""
     conn = db.get_connection()
     cursor = conn.cursor()
     query = "SELECT * FROM complaints WHERE id = ?"
@@ -347,6 +368,7 @@ def update_complaint_status(
     note: Optional[str] = None,
     actor: str = "Authority Officer"
 ) -> Optional[Complaint]:
+    """Change status, append a timeline event and (if given) an internal note."""
     complaint = get_complaint_by_id(complaint_id)
     if not complaint:
         return None
@@ -390,6 +412,7 @@ def assign_complaint(
     note: Optional[str] = None,
     actor: str = "Admin Officer"
 ) -> Optional[Complaint]:
+    """Assign department + officer; status automatically becomes ASSIGNED."""
     complaint = get_complaint_by_id(complaint_id)
     if not complaint:
         return None
@@ -429,6 +452,7 @@ def resolve_complaint(
     resolution_images: List[str],
     actor: str = "Field Inspector"
 ) -> Optional[Complaint]:
+    """Mark RESOLVED and store the repair note and proof photos (base64 images)."""
     complaint = get_complaint_by_id(complaint_id)
     if not complaint:
         return None

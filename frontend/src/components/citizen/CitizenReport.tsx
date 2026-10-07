@@ -1,3 +1,16 @@
+/**
+ * CitizenReport - the main citizen screen (docs/04_FRONTEND_WALKTHROUGH.md).
+ *
+ * Flow:
+ *   1. pick/capture a photo            -> handleFileProcess()
+ *   2. send it to POST /api/detect     -> detectPotholes()  (ML pipeline on the backend)
+ *   3. show annotated image + severity -> detectionResult state (toggle annotated/original)
+ *   4. capture GPS + contact details   -> handleCaptureLocation() / form state
+ *   5. submit the complaint            -> handleSubmit() -> createComplaint() -> shows reference ID
+ *
+ * State is kept in local useState hooks; the citizen profile and the list of the user's
+ * complaint IDs are persisted in localStorage so the Track page can find them.
+ */
 import React, { useState, useRef } from "react";
 import {
   Card,
@@ -154,7 +167,7 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
       setDetectionResult(result);
       setViewMode("annotated");
     } catch (err: any) {
-      setDetectionError(err.message || "Failed to analyze road image with YOLO.");
+      setDetectionError(err.message || "Failed to analyze road image with the AI pipeline.");
     } finally {
       setIsDetecting(false);
     }
@@ -181,6 +194,8 @@ export const CitizenReport: React.FC<CitizenReportProps> = ({
 
     setIsSubmitting(true);
     try {
+      // The full AI result (severity, boxes, depth, Grad-CAM...) is stored with the complaint
+      // so officers see exactly what the model saw.
       const complaint = await createComplaint({
         image: detectionResult.original_image,
         annotated_image: detectionResult.annotated_image,

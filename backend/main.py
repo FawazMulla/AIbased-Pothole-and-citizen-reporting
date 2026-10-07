@@ -1,3 +1,16 @@
+"""
+FastAPI application = the HTTP layer of the platform.
+
+Request flow:  React frontend --HTTP/JSON--> main.py --> ai_service (ML) / database (SQL)
+
+Endpoint groups
+  /api/detect                   run the ML pipeline on an uploaded photo
+  /api/complaints [...]         complaint CRUD + lifecycle (assign, status, resolve)
+  /api/dashboard/stats          counters for the authority dashboard
+  /api/admin/*                  demo seeding and DB diagnostics
+  /{anything else}              serves the built React app (single-page-app fallback)
+See docs/03_BACKEND_WALKTHROUGH.md
+"""
 import os
 import base64
 import json
@@ -31,10 +44,11 @@ from .database import (
 
 app = FastAPI(
     title="AI Pothole & Road Defect Platform API",
-    description="Clean API boundary wrapping PeterHdd/pothole-detection-yolo YOLOv8 engine and municipal complaint lifecycle.",
+    description="API wrapping the multi-stage ML pipeline (CNN road gate, YOLOv8 detection/segmentation, depth-aware severity, Grad-CAM) and the municipal complaint lifecycle.",
     version="1.0.0"
 )
 
+# CORS: lets the React dev server (different port) call this API from the browser.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -79,6 +93,7 @@ async def detect_potholes(file: UploadFile = File(...)):
 
 @app.post("/api/complaints", response_model=Complaint)
 def create_complaint(complaint_data: ComplaintCreate):
+    """Citizen submits a report: photo + AI result + GPS + contact. Stored with status NEW."""
     try:
         complaint = create_complaint_record(
             image=complaint_data.image,

@@ -1,3 +1,9 @@
+/**
+ * App - root component and simple view router.
+ * `currentView` (useState) decides which screen renders: landing | auth | report | track | cms.
+ * Officer/citizen sessions are restored from localStorage on first load (useEffect).
+ * Also captures the browser's PWA 'beforeinstallprompt' event for the Install button.
+ */
 import React, { useState, useEffect } from "react";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";

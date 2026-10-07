@@ -21,16 +21,21 @@ class BoundingBox(BaseModel):
     confidence: float
     bbox: List[int]
     area_ratio: Optional[float] = None
+    depth_score: Optional[float] = None   # 0..1, how deep the pothole is (MiDaS)
 
 class DetectionResult(BaseModel):
     detected: bool
     pothole_count: int
     confidence: float
     severity: DefectSeverity
+    severity_score: Optional[float] = None  # continuous 0..1 score behind the label
+    depth_score: Optional[float] = None
     detections: List[BoundingBox]
     summary: str
     annotated_image: str
     original_image: str
+    gradcam_image: Optional[str] = None     # CNN explainability heat-map
+    road_check: Optional[Dict[str, Any]] = None  # CNN road-gate result
     duration_ms: Optional[float] = None
     model_provenance: Optional[str] = None
 

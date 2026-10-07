@@ -1,180 +1,171 @@
-import os
-import io
-import time
+"""
+AI inference service - orchestrates the multi-stage ML pipeline.
+
+    photo ──► [1] CNN road classifier (gate)
+          └─► [2] YOLOv8 pothole detector / segmenter
+          └─► [3] MiDaS depth estimation (optional)
+          └─► [4] Severity score = f(area, depth, count)
+          └─► [5] Grad-CAM heat-map + annotated image
+
+main.py only calls `ai_service.detect(image_bytes)`; everything else is hidden
+here. The returned dict matches models.DetectionResult (new fields are optional).
+Detailed explanation: docs/02_ML_PIPELINE.md
+"""
 import base64
-import numpy as np
+import os
+import time
+from typing import Any, Dict, List
+
 import cv2
+import numpy as np
 import torch
-from PIL import Image, UnidentifiedImageError
-from typing import List, Dict, Any, Tuple
-from ultralytics import YOLO
+
+from .ml.classifier import RoadClassifier
+from .ml.depth import DepthEstimator
+from .ml.gradcam import grad_cam
+from .ml.segmenter import PotholeSegmenter
+from .ml.severity import compute_severity
+
+WEIGHTS_DIR = os.path.join(os.path.dirname(__file__), "weights")
+# If the classifier is at least this sure the photo is NOT a road, we reject it.
+NOT_ROAD_REJECT_CONF = 0.85
+
+SEVERITY_COLORS_BGR = {"HIGH": (30, 40, 220), "MEDIUM": (20, 140, 240), "LOW": (30, 180, 50)}
+
+
+def _to_data_uri(img_bgr: np.ndarray, quality: int = 88) -> str:
+    """Encode an OpenCV image as a base64 JPEG data-URI the frontend can show directly."""
+    _, buf = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    return "data:image/jpeg;base64," + base64.b64encode(buf).decode("utf-8")
+
 
 class PotholeDetectionService:
-    """
-    AI Inference Service wrapping the open-source YOLOv8 fine-tuned pothole detection model
-    from PeterHdd/pothole-detection-yolo (https://github.com/PeterHdd/pothole-detection-yolo).
-    """
-    def __init__(self, model_path: str = None):
-        default_path = os.path.join(os.path.dirname(__file__), "pothole_yolov8.pt")
-        self.model_path = model_path or os.getenv("MODEL_PATH", default_path)
-        self.device = self._select_device()
-        self.model = None
-        self._load_model()
+    def __init__(self):
+        self.device = os.getenv("YOLO_DEVICE", "cuda:0") if torch.cuda.is_available() else "cpu"
+        self.classifier = RoadClassifier(os.path.join(WEIGHTS_DIR, "road_classifier.pt"), "cpu")
+        self.segmenter = PotholeSegmenter(device=self.device)
+        self.depth = DepthEstimator(device="cpu")
 
-    def _select_device(self) -> str:
-        if torch.cuda.is_available():
-            return os.getenv("YOLO_DEVICE", "cuda:0")
-        return "cpu"
+    @property
+    def model(self):
+        """Kept for backwards compatibility (/health endpoint checks it)."""
+        return self.segmenter.model
 
-    def _load_model(self):
-        try:
-            if not os.path.exists(self.model_path):
-                # Fallback to yolov8n.pt if custom weights not yet present
-                self.model_path = "yolov8n.pt"
-            print(f"[AI Service] Loading fine-tuned YOLO model from {self.model_path} on {self.device}...")
-            self.model = YOLO(self.model_path)
-            self.model.to(self.device)
-            print(f"[AI Service] YOLO pothole detection model loaded successfully.")
-        except Exception as e:
-            print(f"[AI Service] Warning loading YOLO model ({e}), falling back to yolov8n.pt")
-            self.model = YOLO("yolov8n.pt")
+    # ------------------------------------------------------------------ helpers
+    def _annotate(self, img_bgr: np.ndarray, dets: List[Dict[str, Any]], severity: str) -> np.ndarray:
+        """Draw translucent masks, boxes and labels."""
+        out = img_bgr.copy()
+        color = SEVERITY_COLORS_BGR[severity]
+        overlay = out.copy()
+        for d in dets:
+            if d["has_true_mask"]:
+                overlay[d["mask"]] = color
+        out = cv2.addWeighted(overlay, 0.35, out, 0.65, 0)
 
-    def _detect_road_anomalies_cv(self, img_bgr: np.ndarray) -> List[Dict[str, Any]]:
-        """
-        Computer vision road surface contour analyzer for supplementary dark cavity / depression detection.
-        """
-        h, w = img_bgr.shape[:2]
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (7, 7), 0)
-        thresh = cv2.adaptiveThreshold(
-            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 6
-        )
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
-        opened = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
-        closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=3)
-        contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        cv_detections = []
-        total_img_area = h * w
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if 0.008 * total_img_area < area < 0.40 * total_img_area:
-                x, y, bw, bh = cv2.boundingRect(cnt)
-                aspect_ratio = float(bw) / bh if bh > 0 else 0
-                if 0.3 <= aspect_ratio <= 3.5:
-                    conf = min(0.94, 0.76 + (area / total_img_area) * 0.5)
-                    cv_detections.append({
-                        "class_name": "pothole",
-                        "confidence": round(float(conf), 2),
-                        "bbox": [int(x), int(y), int(x + bw), int(y + bh)],
-                        "area_ratio": round(area / total_img_area, 4)
-                    })
-        cv_detections.sort(key=lambda d: d["bbox"][2]*d["bbox"][3], reverse=True)
-        return cv_detections[:3]
+        for i, d in enumerate(dets):
+            x1, y1, x2, y2 = d["bbox"]
+            cv2.rectangle(out, (x1, y1), (x2, y2), color, 3)
+            text = f"Pothole #{i + 1} ({int(d['confidence'] * 100)}%) - {severity}"
+            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+            cv2.rectangle(out, (x1, max(0, y1 - th - 10)), (x1 + tw + 12, y1), color, -1)
+            cv2.putText(out, text, (x1 + 6, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        return out
 
-    def detect(self, image_bytes: bytes) -> Dict[str, Any]:
-        """
-        Executes YOLOv8 pothole inference on image bytes, computes bounding boxes, confidence,
-        area-based severity assessment, and generates high-contrast visual annotations.
-        """
-        start_time = time.perf_counter()
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img_bgr is None:
-            raise ValueError("Invalid or unreadable image file.")
-
-        h, w = img_bgr.shape[:2]
-        detections: List[Dict[str, Any]] = []
-
-        # 1. Run fine-tuned YOLOv8 model inference
-        if self.model is not None:
-            try:
-                # Run YOLO inference with 0.25 confidence threshold
-                results = self.model.predict(img_bgr, imgsz=640, conf=0.25, verbose=False)
-                if results and len(results) > 0:
-                    result = results[0]
-                    for box in result.boxes:
-                        cls_id = int(box.cls[0].item())
-                        raw_name = result.names.get(cls_id, str(cls_id))
-                        # Fine-tuned pothole model classes or custom pothole label
-                        label = "pothole" if str(raw_name).lower() in ["0", "pothole", "defect", "hole"] else str(raw_name)
-                        conf = float(box.conf[0].item())
-                        xyxy = [int(v) for v in box.xyxy[0].tolist()]
-                        
-                        # Clip bounding box to image bounds
-                        x1 = max(0, min(w, xyxy[0]))
-                        y1 = max(0, min(h, xyxy[1]))
-                        x2 = max(0, min(w, xyxy[2]))
-                        y2 = max(0, min(h, xyxy[3]))
-
-                        box_w = max(0, x2 - x1)
-                        box_h = max(0, y2 - y1)
-                        area_ratio = round((box_w * box_h) / (w * h), 4)
-
-                        detections.append({
-                            "class_name": label,
-                            "confidence": round(conf, 2),
-                            "bbox": [x1, y1, x2, y2],
-                            "area_ratio": area_ratio
-                        })
-            except Exception as e:
-                print(f"[AI Service] Model predict warning: {e}")
-
-        detected = len(detections) > 0
-        max_conf = max([d["confidence"] for d in detections]) if detected else 0.0
-        total_area_ratio = sum([d.get("area_ratio", 0.0) for d in detections])
-
-        # Compute severity based on defect count, area and confidence
-        if not detected:
-            severity = "LOW"
-        elif total_area_ratio > 0.12 or max_conf > 0.88 or len(detections) >= 3:
-            severity = "HIGH"
-        elif total_area_ratio > 0.04 or max_conf > 0.60 or len(detections) >= 2:
-            severity = "MEDIUM"
-        else:
-            severity = "LOW"
-
-        # Generate annotated image with bounding boxes & civic badge overlay if defects detected
-        annotated_bgr = img_bgr.copy()
-        if detected:
-            for idx, det in enumerate(detections):
-                x1, y1, x2, y2 = det["bbox"]
-                color = (30, 40, 220) if severity == "HIGH" else ((20, 140, 240) if severity == "MEDIUM" else (30, 180, 50))
-                
-                # Draw bounding box
-                cv2.rectangle(annotated_bgr, (x1, y1), (x2, y2), color, 3)
-                
-                # Badge header
-                label_text = f"Pothole #{idx+1} ({int(det['confidence']*100)}%) - {severity}"
-                (text_w, text_h), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-                cv2.rectangle(annotated_bgr, (x1, max(0, y1 - text_h - 10)), (x1 + text_w + 12, y1), color, -1)
-                cv2.putText(annotated_bgr, label_text, (x1 + 6, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-
-        # Base64 encodings
-        _, buffer = cv2.imencode('.jpg', annotated_bgr, [cv2.IMWRITE_JPEG_QUALITY, 88])
-        annotated_b64 = "data:image/jpeg;base64," + base64.b64encode(buffer).decode('utf-8')
-
-        _, orig_buffer = cv2.imencode('.jpg', img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        orig_b64 = "data:image/jpeg;base64," + base64.b64encode(orig_buffer).decode('utf-8')
-
-        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 1)
-        summary_text = (
-            f"{len(detections)} pothole defect{'s' if len(detections) > 1 else ''} identified ({int(max_conf*100)}% confidence, {severity} Severity)."
-            if detected else "No road defects detected in this photo."
-        )
-
+    def _empty_result(self, img_bgr: np.ndarray, summary: str, start: float, **extra) -> Dict[str, Any]:
+        uri = _to_data_uri(img_bgr, 85)
         return {
-            "detected": detected,
-            "pothole_count": len(detections),
-            "confidence": round(max_conf, 2),
-            "severity": severity,
-            "detections": detections,
-            "summary": summary_text,
-            "annotated_image": annotated_b64,
-            "original_image": orig_b64,
-            "duration_ms": elapsed_ms,
-            "model_provenance": "PeterHdd/pothole-detection-yolo (YOLOv8 fine-tuned on Pothole Dataset)"
+            "detected": False, "pothole_count": 0, "confidence": 0.0, "severity": "LOW",
+            "detections": [], "summary": summary, "annotated_image": uri, "original_image": uri,
+            "duration_ms": round((time.perf_counter() - start) * 1000, 1),
+            "model_provenance": self._provenance(), **extra,
         }
 
-# Global singleton
+    def _provenance(self) -> str:
+        parts = [f"Detector: {os.path.basename(self.segmenter.model_path)}"]
+        if self.classifier.is_available:
+            parts.append("Road gate: MobileNetV3-Small")
+        if self.depth.is_available:
+            parts.append("Depth: MiDaS-small")
+        return " | ".join(parts)
+
+    # --------------------------------------------------------------------- main
+    def detect(self, image_bytes: bytes) -> Dict[str, Any]:
+        start = time.perf_counter()
+        img_bgr = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if img_bgr is None:
+            raise ValueError("Invalid or unreadable image file.")
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+        # ---- Stage 1: CNN road gate + Grad-CAM -------------------------------
+        road_info, gradcam_uri = None, None
+        if self.classifier.is_available:
+            road_info = self.classifier.predict(img_rgb)
+            if road_info["label"] == "not_road" and road_info["confidence"] >= NOT_ROAD_REJECT_CONF:
+                return self._empty_result(
+                    img_bgr, "This does not look like a road photo. Please upload a clear photo of the road surface.",
+                    start, road_check=road_info)
+            target = ["not_road", "road_clean", "road_pothole"].index(road_info["label"])
+            try:
+                gradcam_uri = _to_data_uri(cv2.cvtColor(grad_cam(self.classifier, img_rgb, target), cv2.COLOR_RGB2BGR))
+            except Exception as e:
+                print(f"[AI Service] Grad-CAM skipped: {e}")
+
+        # ---- Stage 2: YOLO detection / segmentation --------------------------
+        try:
+            dets = self.segmenter.predict(img_bgr)
+        except Exception as e:
+            print(f"[AI Service] Detector warning: {e}")
+            dets = []
+
+        if not dets:
+            return self._empty_result(img_bgr, "No road defects detected in this photo.", start,
+                                      road_check=road_info, gradcam_image=gradcam_uri)
+
+        # ---- Stage 3: depth per pothole --------------------------------------
+        depth_scores = []
+        if self.depth.is_available:
+            try:
+                dmap = self.depth.depth_map(img_rgb)
+                for d in dets:
+                    s = self.depth.pothole_depth_score(dmap, d["mask"])
+                    d["depth_score"] = None if s is None else round(s, 3)
+                    if s is not None:
+                        depth_scores.append(s)
+            except Exception as e:
+                print(f"[AI Service] Depth skipped: {e}")
+        depth_score = max(depth_scores) if depth_scores else None
+
+        # ---- Stage 4: severity -----------------------------------------------
+        total_area = sum(d["area_ratio"] for d in dets)
+        sev = compute_severity(total_area, len(dets), depth_score)
+        severity = sev["severity"]
+        max_conf = max(d["confidence"] for d in dets)
+
+        # ---- Stage 5: output -------------------------------------------------
+        annotated = self._annotate(img_bgr, dets, severity)
+        public_dets = [
+            {k: d[k] for k in ("class_name", "confidence", "bbox", "area_ratio")} | {"depth_score": d.get("depth_score")}
+            for d in dets
+        ]
+        n = len(dets)
+        summary = f"{n} pothole defect{'s' if n > 1 else ''} identified ({int(max_conf * 100)}% confidence, {severity} Severity)."
+        return {
+            "detected": True,
+            "pothole_count": n,
+            "confidence": round(max_conf, 2),
+            "severity": severity,
+            "severity_score": sev["score"],
+            "depth_score": None if depth_score is None else round(depth_score, 3),
+            "detections": public_dets,
+            "summary": summary,
+            "annotated_image": _to_data_uri(annotated),
+            "original_image": _to_data_uri(img_bgr, 85),
+            "gradcam_image": gradcam_uri,
+            "road_check": road_info,
+            "duration_ms": round((time.perf_counter() - start) * 1000, 1),
+            "model_provenance": self._provenance(),
+        }
+
+
+# Global singleton (loaded once when the server starts)
 ai_service = PotholeDetectionService()

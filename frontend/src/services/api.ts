@@ -1,3 +1,8 @@
+/**
+ * API client: the ONLY place the frontend talks to the FastAPI backend.
+ * The TypeScript interfaces below mirror backend/models.py (Pydantic schemas).
+ * API_BASE_URL is empty in production (same origin) and set via VITE_API_BASE_URL in dev.
+ */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 function getFullUrl(path: string): URL {
@@ -27,6 +32,7 @@ export interface BoundingBox {
   confidence: number;
   bbox: [number, number, number, number];
   area_ratio?: number;
+  depth_score?: number | null; // 0..1 pothole depth from MiDaS (null if depth stage off)
 }
 
 export interface DetectionResult {
@@ -34,10 +40,14 @@ export interface DetectionResult {
   pothole_count: number;
   confidence: number;
   severity: DefectSeverity;
+  severity_score?: number | null; // continuous 0..1 score behind the severity label
+  depth_score?: number | null;
   detections: BoundingBox[];
   summary: string;
   annotated_image: string;
   original_image: string;
+  gradcam_image?: string | null; // Grad-CAM heat-map of the CNN classifier
+  road_check?: { label: string; confidence: number; probabilities: Record<string, number> } | null;
   duration_ms?: number;
   model_provenance?: string;
 }
