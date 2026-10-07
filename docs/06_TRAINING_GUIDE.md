@@ -8,9 +8,9 @@ pip install -r ml_training/requirements.txt
 
 ## Quick Start: Train on 10,000+ Images (Google Colab / Kaggle GPU)
 If you want to train on **10,000+ images**, do NOT train on your laptop CPU (which takes 25–40 hours). Instead, use the ready-to-run Jupyter notebook:
-👉 **[`ml_training/train_pothole_10k_colab.ipynb`](../ml_training/train_pothole_10k_colab.ipynb)**
+👉 **[`ml_training/train_pothole_5k_colab.ipynb`](../ml_training/train_pothole_5k_colab.ipynb)**
 
-1. Upload `train_pothole_10k_colab.ipynb` to [Google Colab](https://colab.research.google.com).
+1. Upload `train_pothole_5k_colab.ipynb` to [Google Colab](https://colab.research.google.com).
 2. Set Runtime to **T4 GPU** (free tier).
 3. Click **Runtime -> Run all**.
    - Downloads the 13,767-image Pothole Detection dataset in YOLOv8 format.
